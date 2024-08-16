@@ -152,7 +152,6 @@ namespace PowerControl
 
         private void Root_OnOptionValueChange(MenuItemWithOptions options, string? oldValue, string newValue)
         {
-            Log.TraceLine("ProfilesController: TESTTTT {0} from {1}", CurrentProfileSettings.ProfileName, AutostartProfileSettings.ProfileName);
             if (options.PersistentKey is null)
                 return;
             if (CurrentProfileSettings.ProfileName == AutostartProfileSettings.ProfileName) {
