@@ -38,7 +38,7 @@ namespace PowerControl.Options
             OptionsValues = () => { return UserOptions().GetOptions(); },
             ApplyDelay = 1000,
             Visible = VangoghGPU.IsSupported,
-            ActiveOption = "?",
+            ActiveOption = "Default",
             ResetValue = () => { return UserOptions().GetOptions().FirstOrDefault("Default"); },
             ApplyValue = (selected) =>
             {

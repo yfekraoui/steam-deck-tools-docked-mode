@@ -9,6 +9,7 @@ namespace PowerControl.Options
         {
             Name = "FPS Limit",
             PersistentKey = "FPSLimit",
+            PersistOnCreate = true,
             ApplyDelay = 500,
             ResetValue = () => { return "Off"; },
             OptionsValues = delegate ()

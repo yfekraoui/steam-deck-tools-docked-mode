@@ -8,7 +8,7 @@ namespace PowerControl
 {
     internal static class Program
     {
-        const int MAX_GPU_RETRIES = 3;
+        const int MAX_GPU_RETRIES = 10;
 
         /// <summary>
         ///  The main entry point for the application.

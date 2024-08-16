@@ -52,11 +52,7 @@ namespace PowerControl.Options
                         return "None";
 
                     case "Create New":
-                        Controller?.CreateProfile(false);
-                        return Controller?.CurrentProfileSettings?.ProfileName;
-
-                    case "Save All":
-                        Controller?.CreateProfile(true);
+                        Controller?.CreateProfile();
                         return Controller?.CurrentProfileSettings?.ProfileName;
 
                     default:

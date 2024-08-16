@@ -13,6 +13,17 @@ namespace ExternalHelpers
             }
         }
 
+        public static bool? IsExternalConnected
+        {
+            get
+            {
+                return GetDisplayConfigPathInfos()?.Any((path) => path.flags.HasFlag(DISPLAYCONFIG_PATH.DISPLAYCONFIG_PATH_ACTIVE) && 
+                (path.targetInfo.outputTechnology.HasFlag(DISPLAYCONFIG_VIDEO_OUTPUT_TECHNOLOGY.DISPLAYCONFIG_OUTPUT_TECHNOLOGY_HDMI) || 
+                path.targetInfo.outputTechnology.HasFlag(DISPLAYCONFIG_VIDEO_OUTPUT_TECHNOLOGY.DISPLAYCONFIG_OUTPUT_TECHNOLOGY_DISPLAYPORT_EXTERNAL) || 
+                path.targetInfo.outputTechnology.HasFlag(DISPLAYCONFIG_VIDEO_OUTPUT_TECHNOLOGY.DISPLAYCONFIG_OUTPUT_TECHNOLOGY_UDI_EXTERNAL)));
+            }
+        }
+
         private static DISPLAYCONFIG_PATH_INFO[]? GetDisplayConfigPathInfos()
         {
             var err = GetDisplayConfigBufferSizes(QDC.QDC_ONLY_ACTIVE_PATHS, out var pathCount, out var modeCount);

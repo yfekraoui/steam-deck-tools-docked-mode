@@ -31,6 +31,7 @@ namespace PowerControl
         }
 
         public ProfileSettings? CurrentProfileSettings { get; private set; }
+        public ProfileSettings AutostartProfileSettings { get; private set; }
 
         public ProfilesController()
         {
@@ -39,6 +40,14 @@ namespace PowerControl
 
             timer.Start();
             timer.Tick += Timer_Tick;
+
+            ApplyAutostartProfile();
+        }
+
+        public void ApplyAutostartProfile() {
+            AutostartProfileSettings = new ProfileSettings("PowerControl", "Autostart");
+            ProfileChanged(null);
+            ApplyProfile(AutostartProfileSettings);
         }
 
         ~ProfilesController()
@@ -64,11 +73,10 @@ namespace PowerControl
 
         private void RefreshProfiles()
         {
-            if (DisplayConfig.IsInternalConnected != true)
+            if (CurrentProfileSettings != null && (DisplayConfig.IsExternalConnected.GetValueOrDefault(false) && !CurrentProfileSettings.ConfigFile.Contains(".Docked") || !DisplayConfig.IsExternalConnected.GetValueOrDefault(false) && CurrentProfileSettings.ConfigFile.Contains(".Docked")))
             {
                 foreach (var process in watchedProcesses)
                     RemoveProcess(process.Key);
-                return;
             }
 
             OSDHelpers.Applications.Instance.Refresh();
@@ -97,9 +105,20 @@ namespace PowerControl
                 Log.TraceLine("ProfilesController: Foreground changed: {0} => {1}",
                     CurrentProfileSettings?.ProfileName, profileSettings.ProfileName);
                 CurrentProfileSettings = profileSettings;
-                ProfileChanged();
+                ProfileChanged(profileSettings);
             }
             return true;
+        }
+
+        private string getProfilePrefix() {
+            string prefix = "PowerControl.Process";
+            if (DisplayConfig.IsExternalConnected.GetValueOrDefault(false)) {
+                prefix += ".Docked";
+                Log.TraceLine("ProfilesController: DOCKED MODE");
+            } else {
+                Log.TraceLine("ProfilesController: REGULAR MODE");
+            }
+            return prefix;
         }
 
         private void AddProcess(int processId, string processName)
@@ -109,7 +128,7 @@ namespace PowerControl
             if (changedSettings == null)
                 changedSettings = new Dictionary<MenuItemWithOptions, string>();
 
-            var profileSettings = new ProfileSettings(processName);
+            var profileSettings = new ProfileSettings(getProfilePrefix(), processName);
             watchedProcesses.Add(processId, profileSettings);
 
             ApplyProfile(profileSettings);
@@ -123,18 +142,22 @@ namespace PowerControl
             if (CurrentProfileSettings == profileSettings)
                 CurrentProfileSettings = null;
 
+            ResetProfile();
+
             Log.TraceLine("ProfilesController: Removed Process: {0}", processId);
 
             if (watchedProcesses.Any())
                 return;
-
-            ResetProfile();
         }
 
         private void Root_OnOptionValueChange(MenuItemWithOptions options, string? oldValue, string newValue)
         {
+            Log.TraceLine("ProfilesController: TESTTTT {0} from {1}", CurrentProfileSettings.ProfileName, AutostartProfileSettings.ProfileName);
             if (options.PersistentKey is null)
                 return;
+            if (CurrentProfileSettings.ProfileName == AutostartProfileSettings.ProfileName) {
+                return;
+            }
 
             if (oldValue is not null)
             {
@@ -155,48 +178,45 @@ namespace PowerControl
             }
         }
 
-        private void ProfileChanged()
+        private void ProfileChanged(ProfileSettings? profileSettings)
         {
             foreach (var menuItem in PersistableOptions())
             {
-                menuItem.ProfileOption = CurrentProfileSettings?.GetValue(menuItem.PersistentKey ?? "");
+                menuItem.ProfileOption = profileSettings?.GetValue(menuItem.PersistentKey ?? "");
             }
         }
 
-        public void CreateProfile(bool saveAll = true)
+        public void CreateProfile()
         {
             var profileSettings = CurrentProfileSettings;
 
             profileSettings?.TouchFile();
 
-            Log.TraceLine("ProfilesController: Created Profile: {0}, SaveAll={1}",
-                profileSettings?.ProfileName, saveAll);
-
-            if (!saveAll)
-                return;
+            Log.TraceLine("ProfilesController: Created Profile: {0}",
+                profileSettings?.ProfileName);
 
             foreach (var menuItem in PersistableOptions())
             {
-                if (menuItem.ActiveOption is null || !menuItem.PersistOnCreate)
+                if (!menuItem.PersistOnCreate || menuItem.ActiveOption is null)
                     continue;
                 profileSettings?.SetValue(menuItem.PersistentKey ?? "", menuItem.ActiveOption);
             }
 
-            ProfileChanged();
+            ProfileChanged(profileSettings);
         }
 
         public void DeleteProfile()
         {
             CurrentProfileSettings?.DeleteFile();
-            ProfileChanged();
+            ProfileChanged(CurrentProfileSettings);
 
             Log.TraceLine("ProfilesController: Deleted Profile: {0}", CurrentProfileSettings?.ProfileName);
         }
 
-        private void ApplyProfile(ProfileSettings profileSettings)
-        {
+         private void ApplyProfile(ProfileSettings profileSettings)
+         {
             CurrentProfileSettings = profileSettings;
-            ProfileChanged();
+            ProfileChanged(profileSettings);
 
             if (CurrentProfileSettings is null || CurrentProfileSettings?.Exists != true)
                 return;
@@ -231,10 +251,10 @@ namespace PowerControl
             });
         }
 
-        private void ResetProfile()
+        public void ResetProfile()
         {
-            CurrentProfileSettings = null;
-            ProfileChanged();
+            CurrentProfileSettings = AutostartProfileSettings;
+            ProfileChanged(null);
 
             if (changedSettings is null)
                 return;
@@ -244,27 +264,7 @@ namespace PowerControl
             changedSettings = null;
 
             changeTask?.Cancel();
-            changeTask = Dispatcher.RunWithDelay(ResetProfileDelayMs, () =>
-            {
-                foreach (var menuItem in PersistableOptions())
-                {
-                    if (!appliedSettings.TryGetValue(menuItem, out var setting))
-                        continue;
-
-                    try
-                    {
-                        menuItem.Set(setting, true, true);
-
-                        Log.TraceLine("ProfilesController: Reset: {0} = {1}",
-                            menuItem.PersistentKey, setting);
-                    }
-                    catch (Exception e)
-                    {
-                        Log.TraceLine("ProfilesController: Reset Exception: {0} = {1} => {2}",
-                            menuItem.PersistentKey, setting, e);
-                    }
-                }
-            });
+            ApplyProfile(CurrentProfileSettings);
         }
 
         private IEnumerable<MenuItemWithOptions> PersistableOptions()

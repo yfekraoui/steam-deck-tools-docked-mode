@@ -8,7 +8,7 @@ namespace PowerControl.Options
         {
             Name = "FAN",
             PersistentKey = "FANMode",
-            PersistOnCreate = false,
+            PersistOnCreate = true,
             ApplyDelay = 500,
             OptionsValues = delegate ()
             {

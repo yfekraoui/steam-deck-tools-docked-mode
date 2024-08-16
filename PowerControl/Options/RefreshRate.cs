@@ -9,6 +9,7 @@ namespace PowerControl.Options
         {
             Name = "Refresh Rate",
             PersistentKey = "RefreshRate",
+            PersistOnCreate = true,
             ApplyDelay = 1000,
             ResetValue = () => { return DisplayResolutionController.GetRefreshRates().Max().ToString(); },
             OptionsValues = delegate ()

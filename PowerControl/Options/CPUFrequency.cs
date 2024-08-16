@@ -33,10 +33,10 @@ namespace PowerControl.Options
         {
             Name = "CPU",
             PersistentKey = "CPUFrequency",
-            PersistOnCreate = false,
+            PersistOnCreate = true,
             OptionsValues = () => { return UserOptions().GetOptions(); },
             ApplyDelay = 1000,
-            ActiveOption = "?",
+            ActiveOption = "Default",
             Visible = VangoghGPU.IsSupported,
             ResetValue = () => { return UserOptions().GetOptions().FirstOrDefault("Default"); },
             ApplyValue = (selected) =>

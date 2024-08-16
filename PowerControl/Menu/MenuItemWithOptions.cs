@@ -3,7 +3,7 @@ namespace PowerControl.Menu
     public class MenuItemWithOptions : MenuItem
     {
         public IList<string> Options { get; set; } = new List<string>();
-        public string? SelectedOption { get; private set; }
+        public string? SelectedOption { get; set; }
         public string? ActiveOption { get; set; }
         public string? ProfileOption { get; set; }
         public int ApplyDelay { get; set; }
@@ -77,9 +77,6 @@ namespace PowerControl.Menu
                 else
                     Visible = false;
             }
-
-            if (ActiveOption == null && Options.Count > 0)
-                ActiveOption = Options.First();
         }
 
         public void Set(String value, bool immediate, bool refresh)
@@ -155,8 +152,49 @@ namespace PowerControl.Menu
                     toolStripItem.DropDownItems.Add(item);
                 }
 
+                AddMenuItemsToModifyProfile(
+                    PowerControl.Options.Profiles.Controller?.AutostartProfileSettings,
+                    toolStripItem.DropDownItems
+                );
+
+
                 toolStripItem.Visible = Visible && Options.Count > 0;
             };
+        }
+
+        private void AddMenuItemsToModifyProfile(Helper.ProfileSettings? profileSettings, ToolStripItemCollection dropDownItems)
+        {
+            if (profileSettings is null || PersistentKey is null)
+                return;
+
+            dropDownItems.Add(new ToolStripSeparator());
+
+            var headingItem = new ToolStripMenuItem(profileSettings.ProfileName + ": ");
+            dropDownItems.Add(headingItem);
+
+            var persistedValue = profileSettings.GetValue(PersistentKey);
+
+            foreach (var option in Options)
+            {
+                var item = new ToolStripMenuItem("Set: " + option);
+                item.Checked = option == persistedValue;
+                item.Click += delegate { profileSettings.SetValue(PersistentKey, option); };
+                headingItem.DropDownItems.Add(item);
+            }
+
+            if (persistedValue is not null)
+            {
+                headingItem.Text += persistedValue;
+                headingItem.Checked = true;
+
+                headingItem.DropDownItems.Add(new ToolStripSeparator());
+                var unsetItem = headingItem.DropDownItems.Add("Unset");
+                unsetItem.Click += delegate { profileSettings.DeleteKey(PersistentKey); };
+            }
+            else
+            {
+                headingItem.Text += "Not set";
+            }
         }
 
         private void SelectIndex(int index)

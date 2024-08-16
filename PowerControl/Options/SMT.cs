@@ -9,6 +9,7 @@ namespace PowerControl.Options
         {
             Name = "SMT",
             PersistentKey = "SMT",
+            PersistOnCreate = false,
             ApplyDelay = 500,
             Options = { "No", "Yes" },
             ResetValue = () => { return "Yes"; },

@@ -28,10 +28,13 @@ namespace PowerControl
 
         bool wasInternalDisplayConnected;
 
+        bool isExternalDisplayConnected;
+
         hidapi.HidDevice neptuneDevice = new hidapi.HidDevice(0x28de, 0x1205, 64);
         SDCInput neptuneDeviceState = new SDCInput();
         DateTime? neptuneDeviceNextKey;
         System.Windows.Forms.Timer neptuneTimer;
+        private System.Windows.Forms.Timer displayCheckTimer;
 
         ProfilesController? profilesController;
 
@@ -156,6 +159,11 @@ namespace PowerControl
             osdTimer.Interval = 250;
             osdTimer.Enabled = true;
 
+            displayCheckTimer = new System.Windows.Forms.Timer();
+            displayCheckTimer.Interval = 1000;
+            displayCheckTimer.Tick += DisplayCheckTimer_Tick;
+            displayCheckTimer.Start();
+
             profilesController = new ProfilesController();
 
             GlobalHotKey.RegisterHotKey(Settings.Default.MenuUpKey, () =>
@@ -248,8 +256,18 @@ namespace PowerControl
                 });
             }
 
+            isExternalDisplayConnected = ExternalHelpers.DisplayConfig.IsExternalConnected.GetValueOrDefault(false);
             wasInternalDisplayConnected = ExternalHelpers.DisplayConfig.IsInternalConnected.GetValueOrDefault(false);
-            SystemEvents.DisplaySettingsChanged += SystemEvents_DisplaySettingsChanged;
+        }
+
+        private void DisplayCheckTimer_Tick(object? sender, EventArgs e)
+        {
+            bool currentExternalDisplayState = ExternalHelpers.DisplayConfig.IsExternalConnected.GetValueOrDefault(false);
+            if (currentExternalDisplayState != isExternalDisplayConnected)
+            {
+                isExternalDisplayConnected = currentExternalDisplayState;
+                SystemEvents_DisplaySettingsChanged(this, EventArgs.Empty); // Déclenche manuellement l'événement
+            }
         }
 
         private void OsdTimer_Tick(object? sender, EventArgs e)
@@ -464,25 +482,31 @@ namespace PowerControl
             }
         }
 
-        private void SystemEvents_DisplaySettingsChanged(object? sender, EventArgs e)
+        private void SystemEvents_DisplaySettingsChanged(object sender, EventArgs e)
         {
-            var isInternalDisplayConnected = ExternalHelpers.DisplayConfig.IsInternalConnected.GetValueOrDefault(false);
-            if (wasInternalDisplayConnected == isInternalDisplayConnected)
-                return;
+            bool currentExternalDisplayState = ExternalHelpers.DisplayConfig.IsExternalConnected.GetValueOrDefault(false);
+            isExternalDisplayConnected = currentExternalDisplayState;
+            Log.TraceLine("SystemEvents_DisplaySettingsChanged: External display state changed to {0}", isExternalDisplayConnected);
 
-            Log.TraceLine("SystemEvents_DisplaySettingsChanged: wasConnected={0}, isConnected={1}",
-                wasInternalDisplayConnected, isInternalDisplayConnected);
-
-            wasInternalDisplayConnected = isInternalDisplayConnected;
-            System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(
-                new Action(() =>
-                {
-                    Options.RefreshRate.Instance?.Reset();
-                    Options.FPSLimit.Instance?.Reset();
-
-                    rootMenu.Update();
-                })
-            );
+            if (isExternalDisplayConnected)
+            {
+                Log.TraceLine("External display connected!");
+                System.Diagnostics.Process.Start(@"C:\SteamDeck32\DisplaySwitch.exe", "/external");
+                System.Diagnostics.Process.Start(@"C:\Windows\System32\pnputil.exe", "/scan-devices");
+                profilesController.ApplyAutostartProfile();
+                
+            }
+            else
+            {
+                Log.TraceLine("External display disconnected!");
+                System.Diagnostics.Process.Start(@"C:\SteamDeck32\DisplaySwitch.exe", "/internal");
+                profilesController.ApplyAutostartProfile();
+            }
+            
+            System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(new Action(() =>
+            {
+                rootMenu.Update();
+            }));
         }
     }
 }

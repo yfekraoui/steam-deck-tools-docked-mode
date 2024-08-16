@@ -7,7 +7,6 @@ namespace PowerControl.Options
         public static Menu.MenuItemWithOptions Instance = new Menu.MenuItemWithOptions()
         {
             Name = "GPU Scaling",
-            PersistentKey = "GPUScaling",
             ApplyDelay = 1000,
             Options = Enum.GetNames<GPUScaling.ScalingMode>().Prepend("Off").ToArray(),
             CurrentValue = delegate ()

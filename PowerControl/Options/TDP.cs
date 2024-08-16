@@ -15,23 +15,19 @@ namespace PowerControl.Options
         public static PersistedOptions UserOptions()
         {
             var options = new PersistedOptions("TDP");
-
-            if (options.GetOptions().Count() == 0)
+            options.SetOptions(new PersistedOptions.Option[]
             {
-                options.SetOptions(new PersistedOptions.Option[]
-                {
-                    options.ForOption("3W").Set(SlowTDP, 3000).Set(FastTDP, 3000),
-                    options.ForOption("4W").Set(SlowTDP, 4000).Set(FastTDP, 4000),
-                    options.ForOption("5W").Set(SlowTDP, 5000).Set(FastTDP, 5000),
-                    options.ForOption("6W").Set(SlowTDP, 6000).Set(FastTDP, 6000),
-                    options.ForOption("7W").Set(SlowTDP, 7000).Set(FastTDP, 7000),
-                    options.ForOption("8W").Set(SlowTDP, 8000).Set(FastTDP, 8000),
-                    options.ForOption("9W").Set(SlowTDP, 9000).Set(FastTDP, 9000),
-                    options.ForOption("10W").Set(SlowTDP, 10000).Set(FastTDP, 10000),
-                    options.ForOption("12W").Set(SlowTDP, 12000).Set(FastTDP, 12000),
-                    options.ForOption("15W").Set(SlowTDP, 15000).Set(FastTDP, 15000),
-                });
-            }
+                options.ForOption("3W").Set(SlowTDP, 3000).Set(FastTDP, 3000),
+                options.ForOption("4W").Set(SlowTDP, 4000).Set(FastTDP, 4000),
+                options.ForOption("5W").Set(SlowTDP, 5000).Set(FastTDP, 5000),
+                options.ForOption("6W").Set(SlowTDP, 6000).Set(FastTDP, 6000),
+                options.ForOption("7W").Set(SlowTDP, 7000).Set(FastTDP, 7000),
+                options.ForOption("8W").Set(SlowTDP, 8000).Set(FastTDP, 8000),
+                options.ForOption("9W").Set(SlowTDP, 9000).Set(FastTDP, 9000),
+                options.ForOption("10W").Set(SlowTDP, 10000).Set(FastTDP, 10000),
+                options.ForOption("12W").Set(SlowTDP, 12000).Set(FastTDP, 12000),
+                options.ForOption("15W").Set(SlowTDP, 15000).Set(FastTDP, 15000),
+            });
 
             return options;
         }
@@ -40,12 +36,11 @@ namespace PowerControl.Options
         {
             Name = "TDP",
             PersistentKey = "TDP",
-            PersistOnCreate = false,
+            PersistOnCreate = true,
             OptionsValues = () => { return UserOptions().GetOptions(); },
             ApplyDelay = 1000,
-            Visible = VangoghGPU.IsSupported,
-            ResetValue = () => { return "15W"; },
-            ActiveOption = "?",
+            ResetValue = () => { return "10W"; },
+            ActiveOption = "10W",
             ApplyValue = (selected) =>
             {
                 if (!AntiCheatSettings.Default.AckAntiCheat(

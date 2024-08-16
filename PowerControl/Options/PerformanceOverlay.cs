@@ -8,6 +8,7 @@ namespace PowerControl.Options
         {
             Name = "OSD",
             PersistentKey = "PerformanceOverlay",
+            PersistOnCreate = true,
             ApplyDelay = 500,
             OptionsValues = delegate ()
             {
@@ -34,6 +35,7 @@ namespace PowerControl.Options
         {
             Name = "OSD Mode",
             PersistentKey = "PerformanceOverlayMode",
+            PersistOnCreate = true,
             ApplyDelay = 500,
             OptionsValues = delegate ()
             {
@@ -59,6 +61,8 @@ namespace PowerControl.Options
         public static Menu.MenuItemWithOptions KernelDriversInstance = new Menu.MenuItemWithOptions()
         {
             Name = "OSD Kernel Drivers",
+            PersistentKey = "OSDKernelDriversUse",
+            PersistOnCreate = true,
             ApplyDelay = 500,
             OptionsValues = delegate ()
             {
