@@ -195,7 +195,6 @@ namespace SteamController
 
         private void SystemEvents_PowerModeChanged(object sender, PowerModeChangedEventArgs e)
         {
-            Log.TraceLine("SystemEvents_PowerModeChanged: {0}", e.Mode);
 
             switch (e.Mode)
             {

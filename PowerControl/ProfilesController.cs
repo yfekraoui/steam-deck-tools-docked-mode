@@ -8,7 +8,7 @@ namespace PowerControl
 {
     public class ProfilesController : IDisposable
     {
-        public const bool AutoCreateProfiles = true;
+        public const bool AutoCreateProfiles = false;
         public const int ApplyProfileDelayMs = 500;
         public const int ResetProfileDelayMs = 500;
 
@@ -142,33 +142,30 @@ namespace PowerControl
             if (CurrentProfileSettings == profileSettings)
                 CurrentProfileSettings = null;
 
-            ResetProfile();
-
             Log.TraceLine("ProfilesController: Removed Process: {0}", processId);
 
             if (watchedProcesses.Any())
                 return;
+
+            ResetProfile();
         }
 
         private void Root_OnOptionValueChange(MenuItemWithOptions options, string? oldValue, string newValue)
         {
             if (options.PersistentKey is null)
                 return;
-            if (CurrentProfileSettings.ProfileName == AutostartProfileSettings.ProfileName) {
+
+            // No active profile, cannot persist
+            if (CurrentProfileSettings is null)
                 return;
-            }
 
-            if (oldValue is not null)
-            {
-                if (changedSettings?.TryAdd(options, oldValue) == true)
-                {
-                    Log.TraceLine("ProfilesController: Saved change: {0} from {1}", options.PersistentKey, oldValue);
-                }
-            }
+            // Do not auto-create profile unless requested
+            if (!CurrentProfileSettings.Exists && !AutoCreateProfiles)
+                return;
 
-            // If profile exists persist value
-            if (CurrentProfileSettings != null && (CurrentProfileSettings.Exists || AutoCreateProfiles))
-            {
+            var persistedValue = CurrentProfileSettings.GetValue(options.PersistentKey ?? "");
+
+            if (persistedValue != newValue) {
                 CurrentProfileSettings.SetValue(options.PersistentKey, newValue);
                 options.ProfileOption = newValue;
 
@@ -229,7 +226,9 @@ namespace PowerControl
                 {
                     var persistedValue = CurrentProfileSettings.GetValue(menuItem.PersistentKey ?? "");
                     if (persistedValue is null)
+                    {
                         continue;
+                    }
 
                     try
                     {

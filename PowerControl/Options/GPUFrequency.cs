@@ -34,7 +34,7 @@ namespace PowerControl.Options
         {
             Name = "GPU",
             PersistentKey = "GPUFrequency",
-            PersistOnCreate = false,
+            PersistOnCreate = true,
             OptionsValues = () => { return UserOptions().GetOptions(); },
             ApplyDelay = 1000,
             Visible = VangoghGPU.IsSupported,
