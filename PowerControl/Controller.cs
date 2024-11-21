@@ -7,6 +7,7 @@ using PowerControl.Helpers;
 using RTSSSharedMemoryNET;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Net.NetworkInformation;
 
 namespace PowerControl
 {
@@ -26,9 +27,7 @@ namespace PowerControl
         System.Windows.Forms.Timer osdDismissTimer;
         bool isOSDToggled = false;
 
-        bool wasInternalDisplayConnected;
-
-        bool isExternalDisplayConnected;
+        bool isExternalDisplayConnected = false;
 
         hidapi.HidDevice neptuneDevice = new hidapi.HidDevice(0x28de, 0x1205, 64);
         SDCInput neptuneDeviceState = new SDCInput();
@@ -256,8 +255,20 @@ namespace PowerControl
                 });
             }
 
-            isExternalDisplayConnected = ExternalHelpers.DisplayConfig.IsExternalConnected.GetValueOrDefault(false);
-            wasInternalDisplayConnected = ExternalHelpers.DisplayConfig.IsInternalConnected.GetValueOrDefault(false);
+            //Microsoft.Win32.SystemEvents.PowerModeChanged += SystemEvents_PowerModeChanged;
+        }
+
+        private void SystemEvents_PowerModeChanged(object sender, PowerModeChangedEventArgs e)
+        {
+
+            switch (e.Mode)
+            {
+                case PowerModes.Suspend:
+                    break;
+
+                case PowerModes.Resume:
+                    break;
+            }
         }
 
         private void DisplayCheckTimer_Tick(object? sender, EventArgs e)
@@ -482,6 +493,48 @@ namespace PowerControl
             }
         }
 
+        private bool IsEthernetConnectedWithInternet()
+        {
+            foreach (NetworkInterface ni in NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (ni.NetworkInterfaceType == NetworkInterfaceType.Ethernet && ni.OperationalStatus == OperationalStatus.Up)
+                {
+                    // Vérifier si la carte réseau a une adresse IP attribuée
+                    var ipProperties = ni.GetIPProperties();
+                    var ipv4Address = ipProperties.UnicastAddresses.FirstOrDefault(ip => ip.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork);
+                    
+                    if (ipv4Address == null)
+                    {
+                        Log.TraceLine("Ethernet is connected but has no valid IPv4 address.");
+                        return false;
+                    }
+
+                    // Faire plusieurs tentatives de ping pour vérifier l'accès Internet
+                    for (int i = 0; i < 3; i++)
+                    {
+                        try
+                        {
+                            using (Ping ping = new Ping())
+                            {
+                                PingReply reply = ping.Send("8.8.8.8", 3000);
+                                if (reply != null && reply.Status == IPStatus.Success)
+                                {
+                                    return true; // Ethernet connection has internet
+                                }
+                            }
+                        }
+                        catch (PingException)
+                        {
+                            Log.TraceLine("Ping attempt failed. Retrying...");
+                        }
+                    }
+
+                    Log.TraceLine("Ethernet is connected but ping tests failed. No internet access detected.");
+                }
+            }
+            return false; // No Ethernet connection with internet access
+        }
+
         private void SystemEvents_DisplaySettingsChanged(object sender, EventArgs e)
         {
             bool currentExternalDisplayState = ExternalHelpers.DisplayConfig.IsExternalConnected.GetValueOrDefault(false);
@@ -493,20 +546,76 @@ namespace PowerControl
                 Log.TraceLine("External display connected!");
                 System.Diagnostics.Process.Start(@"C:\SteamDeck32\DisplaySwitch.exe", "/external");
                 System.Diagnostics.Process.Start(@"C:\Windows\System32\pnputil.exe", "/scan-devices");
-                profilesController.ApplyAutostartProfile();
+                ExecuteCommand("radiocontrol.exe", "Bluetooth on");
+                ExecuteCommand("radiocontrol.exe", "Wi-Fi off");
+                Thread.Sleep(3000);
+                if (!IsEthernetConnectedWithInternet()) {
+                    ExecuteCommand("radiocontrol.exe", "Wi-Fi on");
+                }
                 
             }
             else
             {
                 Log.TraceLine("External display disconnected!");
                 System.Diagnostics.Process.Start(@"C:\SteamDeck32\DisplaySwitch.exe", "/internal");
-                profilesController.ApplyAutostartProfile();
+                ExecuteCommand("radiocontrol.exe", "Bluetooth off");
+                ExecuteCommand("radiocontrol.exe", "Wi-Fi on");
             }
+            profilesController.ApplyAutostartProfile();
             
             System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(new Action(() =>
             {
                 rootMenu.Update();
             }));
+        }
+
+        private void ShowNotification(string title, string message, ToolTipIcon icon = ToolTipIcon.Info)
+        {
+            try
+            {
+                notifyIcon.BalloonTipTitle = title;
+                notifyIcon.BalloonTipText = message;
+                notifyIcon.BalloonTipIcon = icon;
+                notifyIcon.ShowBalloonTip(3000); // La notification sera affichée pendant 3 secondes
+            }
+            catch (Exception ex)
+            {
+                Log.TraceLine("Failed to show notification: " + ex.Message);
+            }
+        }
+
+        private void ExecuteCommand(string fileName, string arguments)
+        {
+            try
+            {
+                ProcessStartInfo startInfo = new ProcessStartInfo
+                {
+                    FileName = fileName,
+                    Arguments = arguments,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+
+                using (Process process = new Process { StartInfo = startInfo })
+                {
+                    process.Start();
+                    string output = process.StandardOutput.ReadToEnd();
+                    string error = process.StandardError.ReadToEnd();
+
+                    process.WaitForExit();
+
+                    if (process.ExitCode != 0)
+                    {
+                        Log.TraceLine("Command failed with error: " + error);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.TraceLine("An error occurred while executing the command: " + ex.Message);
+            }
         }
     }
 }
