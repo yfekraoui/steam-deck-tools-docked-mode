@@ -27,7 +27,7 @@ namespace PowerControl
         System.Windows.Forms.Timer osdDismissTimer;
         bool isOSDToggled = false;
 
-        bool isExternalDisplayConnected = false;
+        int isExternalDisplayConnected = -1;
 
         hidapi.HidDevice neptuneDevice = new hidapi.HidDevice(0x28de, 0x1205, 64);
         SDCInput neptuneDeviceState = new SDCInput();
@@ -256,6 +256,7 @@ namespace PowerControl
             }
 
             //Microsoft.Win32.SystemEvents.PowerModeChanged += SystemEvents_PowerModeChanged;
+            NetworkChange.NetworkAddressChanged += new NetworkAddressChangedEventHandler(OnNetworkAddressChanged);
         }
 
         private void SystemEvents_PowerModeChanged(object sender, PowerModeChangedEventArgs e)
@@ -274,9 +275,11 @@ namespace PowerControl
         private void DisplayCheckTimer_Tick(object? sender, EventArgs e)
         {
             bool currentExternalDisplayState = ExternalHelpers.DisplayConfig.IsExternalConnected.GetValueOrDefault(false);
-            if (currentExternalDisplayState != isExternalDisplayConnected)
+            int newState = currentExternalDisplayState ? 1 : 0;
+
+            if (newState != isExternalDisplayConnected)
             {
-                isExternalDisplayConnected = currentExternalDisplayState;
+                isExternalDisplayConnected = newState;
                 SystemEvents_DisplaySettingsChanged(this, EventArgs.Empty); // Déclenche manuellement l'événement
             }
         }
@@ -467,12 +470,21 @@ namespace PowerControl
 
         private void ExitItem_Click(object? sender, EventArgs e)
         {
-            Application.Exit();
+            try
+            {
+                CleanupResources(); // Nettoyage des ressources
+                Environment.Exit(0); // Forcer l'arrêt du processus
+            }
+            catch (Exception ex)
+            {
+                Log.TraceLine($"Error during exit: {ex.Message}");
+            }
         }
 
         public void Dispose()
         {
             using (profilesController) { }
+            CleanupResources();
             components.Dispose();
             osdClose();
         }
@@ -493,73 +505,59 @@ namespace PowerControl
             }
         }
 
-        private bool IsEthernetConnectedWithInternet()
+        private bool IsEthernetCableConnected()
         {
             foreach (NetworkInterface ni in NetworkInterface.GetAllNetworkInterfaces())
             {
-                if (ni.NetworkInterfaceType == NetworkInterfaceType.Ethernet && ni.OperationalStatus == OperationalStatus.Up)
+                // Vérifiez si l'interface est de type Ethernet
+                if (ni.NetworkInterfaceType == NetworkInterfaceType.Ethernet)
                 {
-                    // Vérifier si la carte réseau a une adresse IP attribuée
-                    var ipProperties = ni.GetIPProperties();
-                    var ipv4Address = ipProperties.UnicastAddresses.FirstOrDefault(ip => ip.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork);
-                    
-                    if (ipv4Address == null)
+                    // Vérifiez si le câble Ethernet est branché
+                    if (ni.OperationalStatus == OperationalStatus.Up)
                     {
-                        Log.TraceLine("Ethernet is connected but has no valid IPv4 address.");
-                        return false;
+                        return true; // Câble Ethernet connecté
                     }
-
-                    // Faire plusieurs tentatives de ping pour vérifier l'accès Internet
-                    for (int i = 0; i < 3; i++)
-                    {
-                        try
-                        {
-                            using (Ping ping = new Ping())
-                            {
-                                PingReply reply = ping.Send("8.8.8.8", 3000);
-                                if (reply != null && reply.Status == IPStatus.Success)
-                                {
-                                    return true; // Ethernet connection has internet
-                                }
-                            }
-                        }
-                        catch (PingException)
-                        {
-                            Log.TraceLine("Ping attempt failed. Retrying...");
-                        }
-                    }
-
-                    Log.TraceLine("Ethernet is connected but ping tests failed. No internet access detected.");
                 }
             }
-            return false; // No Ethernet connection with internet access
+            return false; // Aucun câble Ethernet détecté
+        }
+
+        private bool IsEthernetConnectedWithInternet()
+        {
+            try
+            {
+                using (Ping ping = new Ping())
+                {
+                    PingReply reply = ping.Send("8.8.8.8", 3000); // Google DNS
+                    if (reply != null && reply.Status == IPStatus.Success)
+                    {
+                        return true; // Accès Internet disponible
+                    }
+                }
+            }
+            catch (PingException ex)
+            {
+                Log.TraceLine($"Ping failed: {ex.Message}");
+            }
+            return false; // Pas d'accès Internet
         }
 
         private void SystemEvents_DisplaySettingsChanged(object sender, EventArgs e)
         {
-            bool currentExternalDisplayState = ExternalHelpers.DisplayConfig.IsExternalConnected.GetValueOrDefault(false);
-            isExternalDisplayConnected = currentExternalDisplayState;
             Log.TraceLine("SystemEvents_DisplaySettingsChanged: External display state changed to {0}", isExternalDisplayConnected);
 
-            if (isExternalDisplayConnected)
+            if (isExternalDisplayConnected == 1)
             {
                 Log.TraceLine("External display connected!");
                 System.Diagnostics.Process.Start(@"C:\SteamDeck32\DisplaySwitch.exe", "/external");
                 System.Diagnostics.Process.Start(@"C:\Windows\System32\pnputil.exe", "/scan-devices");
-                ExecuteCommand("radiocontrol.exe", "Bluetooth on");
-                ExecuteCommand("radiocontrol.exe", "Wi-Fi off");
-                Thread.Sleep(3000);
-                if (!IsEthernetConnectedWithInternet()) {
-                    ExecuteCommand("radiocontrol.exe", "Wi-Fi on");
-                }
-                
+                System.Diagnostics.Process.Start("radiocontrol.exe", "Bluetooth on");
             }
-            else
+            else if (isExternalDisplayConnected == 0)
             {
                 Log.TraceLine("External display disconnected!");
                 System.Diagnostics.Process.Start(@"C:\SteamDeck32\DisplaySwitch.exe", "/internal");
-                ExecuteCommand("radiocontrol.exe", "Bluetooth off");
-                ExecuteCommand("radiocontrol.exe", "Wi-Fi on");
+                System.Diagnostics.Process.Start("radiocontrol.exe", "Bluetooth off");
             }
             profilesController.ApplyAutostartProfile();
             
@@ -567,6 +565,31 @@ namespace PowerControl
             {
                 rootMenu.Update();
             }));
+        }
+
+        private void OnNetworkAddressChanged(object? sender, EventArgs e)
+        {
+            Log.TraceLine("Network address changed event triggered.");
+
+            // Vérifie si un câble Ethernet est branché
+            bool isEthernetCableConnected = IsEthernetCableConnected();
+            Log.TraceLine("Ethernet cable connected: " + isEthernetCableConnected);
+
+            // Vérifie si l'Ethernet a accès à Internet
+            bool isEthernetConnectedWithInternet = isEthernetCableConnected && IsEthernetConnectedWithInternet();
+            Log.TraceLine("Ethernet has internet access: " + isEthernetConnectedWithInternet);
+
+            // Gestion du Wi-Fi en fonction de l'état Ethernet
+            if (isEthernetConnectedWithInternet)
+            {
+                Log.TraceLine("Disabling Wi-Fi as Ethernet is active with Internet access.");
+                System.Diagnostics.Process.Start("radiocontrol.exe", "Wi-Fi off");
+            }
+            else
+            {
+                Log.TraceLine("Enabling Wi-Fi as Ethernet is not active or lacks Internet access.");
+                System.Diagnostics.Process.Start("radiocontrol.exe", "Wi-Fi on");
+            }
         }
 
         private void ShowNotification(string title, string message, ToolTipIcon icon = ToolTipIcon.Info)
@@ -615,6 +638,39 @@ namespace PowerControl
             catch (Exception ex)
             {
                 Log.TraceLine("An error occurred while executing the command: " + ex.Message);
+            }
+        }
+
+        private void CleanupResources()
+        {
+            try
+            {
+                // Arrêtez et disposez tous les timers
+                displayCheckTimer?.Stop();
+                displayCheckTimer?.Dispose();
+
+                osdDismissTimer?.Stop();
+                osdDismissTimer?.Dispose();
+
+                if (neptuneTimer != null)
+                {
+                    neptuneTimer.Stop();
+                    neptuneTimer.Dispose();
+                }
+
+                // Libérez le dispositif HID si utilisé
+                neptuneDevice?.Dispose();
+
+                // Libérez d'autres ressources comme les profils
+                profilesController?.Dispose();
+
+                // Nettoyez l'icône de la barre des tâches
+                notifyIcon.Visible = false;
+                notifyIcon.Dispose();
+            }
+            catch (Exception ex)
+            {
+                Log.TraceLine($"Error during cleanup: {ex.Message}");
             }
         }
     }
