@@ -8,6 +8,7 @@ using RTSSSharedMemoryNET;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Net.NetworkInformation;
+using System.Text.Json;
 
 namespace PowerControl
 {
@@ -505,42 +506,56 @@ namespace PowerControl
             }
         }
 
-        private bool IsEthernetCableConnected()
+        private bool IsInternetAvailableViaEthernet()
         {
             foreach (NetworkInterface ni in NetworkInterface.GetAllNetworkInterfaces())
             {
-                // Vérifiez si l'interface est de type Ethernet
-                if (ni.NetworkInterfaceType == NetworkInterfaceType.Ethernet)
+                // Vérifiez si l'interface est de type Ethernet et active
+                if (ni.NetworkInterfaceType == NetworkInterfaceType.Ethernet && ni.OperationalStatus == OperationalStatus.Up)
                 {
-                    // Vérifiez si le câble Ethernet est branché
-                    if (ni.OperationalStatus == OperationalStatus.Up)
+                    // Récupérez les propriétés IP de l'interface
+                    IPInterfaceProperties ipProperties = ni.GetIPProperties();
+
+                    // Vérifiez s'il y a une passerelle par défaut pour cette interface
+                    if (ipProperties.GatewayAddresses.Count > 0)
                     {
-                        return true; // Câble Ethernet connecté
+                        foreach (UnicastIPAddressInformation ipInfo in ipProperties.UnicastAddresses)
+                        {
+                            // Vérifiez que l'adresse IP est IPv4 (excluez IPv6, si nécessaire)
+                            if (ipInfo.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+                            {
+                                try
+                                {
+                                    using (Ping ping = new Ping())
+                                    {
+                                        PingOptions options = new PingOptions { DontFragment = true };
+                                        byte[] buffer = new byte[32];
+                                        PingReply reply = ping.Send("8.8.8.8", 3000, buffer, options);
+
+                                        if (reply != null && reply.Status == IPStatus.Success)
+                                        {
+                                            // Vérifiez si l'adresse IP source du ping correspond à l'interface Ethernet
+                                            if (reply.Address.Equals(ipInfo.Address))
+                                            {
+                                                Log.TraceLine($"Internet is available via Ethernet interface: {ni.Name}");
+                                                return true; // Internet disponible via Ethernet
+                                            }
+                                        }
+                                    }
+                                }
+                                catch (PingException ex)
+                                {
+                                    Log.TraceLine($"Ping failed for Ethernet interface {ni.Name}: {ex.Message}");
+                                }
+                            }
+                        }
                     }
                 }
             }
-            return false; // Aucun câble Ethernet détecté
+            return false; // Pas d'accès Internet via Ethernet
         }
 
-        private bool IsEthernetConnectedWithInternet()
-        {
-            try
-            {
-                using (Ping ping = new Ping())
-                {
-                    PingReply reply = ping.Send("8.8.8.8", 3000); // Google DNS
-                    if (reply != null && reply.Status == IPStatus.Success)
-                    {
-                        return true; // Accès Internet disponible
-                    }
-                }
-            }
-            catch (PingException ex)
-            {
-                Log.TraceLine($"Ping failed: {ex.Message}");
-            }
-            return false; // Pas d'accès Internet
-        }
+
 
         private void SystemEvents_DisplaySettingsChanged(object sender, EventArgs e)
         {
@@ -569,28 +584,64 @@ namespace PowerControl
 
         private void OnNetworkAddressChanged(object? sender, EventArgs e)
         {
+            if (!IsEthernetCableConnected()) {
+                return;
+            }
             Log.TraceLine("Network address changed event triggered.");
 
-            // Vérifie si un câble Ethernet est branché
-            bool isEthernetCableConnected = IsEthernetCableConnected();
-            Log.TraceLine("Ethernet cable connected: " + isEthernetCableConnected);
+            // Vérifie si un câble Ethernet est branché et s'il y a Internet via Ethernet
+            Thread.Sleep(3000);
+            bool isInternetAvailableViaEthernet = IsInternetAvailableViaEthernet();
+            Log.TraceLine("Internet available via Ethernet: " + isInternetAvailableViaEthernet);
 
-            // Vérifie si l'Ethernet a accès à Internet
-            bool isEthernetConnectedWithInternet = isEthernetCableConnected && IsEthernetConnectedWithInternet();
-            Log.TraceLine("Ethernet has internet access: " + isEthernetConnectedWithInternet);
+            // Vérifie l'état actuel du Wi-Fi
+            bool isWiFiEnabled = IsWiFiEnabled();
+            Log.TraceLine("Current Wi-Fi state: " + (isWiFiEnabled ? "Enabled" : "Disabled"));
 
-            // Gestion du Wi-Fi en fonction de l'état Ethernet
-            if (isEthernetConnectedWithInternet)
+            // Gestion du Wi-Fi en fonction de l'état Ethernet et de son état actuel
+            if (isInternetAvailableViaEthernet && isWiFiEnabled)
             {
                 Log.TraceLine("Disabling Wi-Fi as Ethernet is active with Internet access.");
                 System.Diagnostics.Process.Start("radiocontrol.exe", "Wi-Fi off");
             }
-            else
+            else if (!isInternetAvailableViaEthernet && !isWiFiEnabled)
             {
                 Log.TraceLine("Enabling Wi-Fi as Ethernet is not active or lacks Internet access.");
                 System.Diagnostics.Process.Start("radiocontrol.exe", "Wi-Fi on");
             }
         }
+
+        private bool IsEthernetCableConnected()
+        {
+            foreach (NetworkInterface ni in NetworkInterface.GetAllNetworkInterfaces())
+            {
+                // Vérifiez si l'interface est de type Ethernet
+                if (ni.NetworkInterfaceType == NetworkInterfaceType.Ethernet)
+                {
+                    // Vérifiez si le câble Ethernet est branché
+                    if (ni.OperationalStatus == OperationalStatus.Up)
+                    {
+                        return true; // Câble Ethernet connecté
+                    }
+                }
+            }
+            return false; // Aucun câble Ethernet détecté
+        }
+
+        private bool IsWiFiEnabled()
+        {
+            foreach (NetworkInterface ni in NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (ni.NetworkInterfaceType == NetworkInterfaceType.Wireless80211 &&
+                    ni.OperationalStatus == OperationalStatus.Up)
+                {
+                    return true; // Wi-Fi activé
+                }
+            }
+            return false; // Wi-Fi désactivé
+        }
+    
+
 
         private void ShowNotification(string title, string message, ToolTipIcon icon = ToolTipIcon.Info)
         {
