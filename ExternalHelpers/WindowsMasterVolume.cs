@@ -204,6 +204,77 @@ namespace PowerControl.Helpers
 
         #endregion
 
+       #region Microphone Mute Manipulation
+
+        /// <summary>
+        /// Gets the mute state of the microphone.
+        /// </summary>
+        /// <returns>true if muted, false if not muted</returns>
+        public static bool GetMicrophoneMute()
+        {
+            IAudioEndpointVolume micVol = null;
+            try
+            {
+                micVol = GetMicrophoneVolumeObject();
+                if (micVol == null)
+                    return false;
+
+                bool isMuted;
+                micVol.GetMute(out isMuted);
+                return isMuted;
+            }
+            finally
+            {
+                if (micVol != null)
+                    Marshal.ReleaseComObject(micVol);
+            }
+        }
+
+        /// <summary>
+        /// Mutes or unmutes the microphone.
+        /// </summary>
+        /// <param name="isMuted">true to mute, false to unmute</param>
+        public static void SetMicrophoneMute(bool isMuted)
+        {
+            IAudioEndpointVolume micVol = null;
+            try
+            {
+                micVol = GetMicrophoneVolumeObject();
+                if (micVol == null)
+                    return;
+
+                micVol.SetMute(isMuted, Guid.Empty);
+            }
+            finally
+            {
+                if (micVol != null)
+                    Marshal.ReleaseComObject(micVol);
+            }
+        }
+
+        private static IAudioEndpointVolume GetMicrophoneVolumeObject()
+        {
+            IMMDeviceEnumerator deviceEnumerator = null;
+            IMMDevice microphone = null;
+            try
+            {
+                deviceEnumerator = (IMMDeviceEnumerator)(new MMDeviceEnumerator());
+                deviceEnumerator.GetDefaultAudioEndpoint(EDataFlow.eCapture, ERole.eCommunications, out microphone);
+
+                Guid IID_IAudioEndpointVolume = typeof(IAudioEndpointVolume).GUID;
+                object o;
+                microphone.Activate(ref IID_IAudioEndpointVolume, 0, IntPtr.Zero, out o);
+                return (IAudioEndpointVolume)o;
+            }
+            finally
+            {
+                if (microphone != null) Marshal.ReleaseComObject(microphone);
+                if (deviceEnumerator != null) Marshal.ReleaseComObject(deviceEnumerator);
+            }
+        }
+
+        #endregion
+
         #region Individual Application Volume Manipulation
 
         public static float? GetApplicationVolume(int pid)
