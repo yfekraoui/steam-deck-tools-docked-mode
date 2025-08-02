@@ -11,36 +11,36 @@ namespace PowerControl.Options
         {
             Name = "Bluetooth",
             Options = { "Disabled", "Enabled" },
-            CurrentValue = delegate ()
+            CurrentValueAsync = async () =>
             {
-                return IsBluetoothEnabled() ? "Enabled" : "Disabled";
+                return await IsBluetoothEnabled() ? "Enabled" : "Disabled";
             },
-            ApplyValue = (selected) =>
+            ApplyValueAsync = async (selected) =>
             {
-                SetBluetoothEnabled(selected == "Enabled");
-                return IsBluetoothEnabled() ? "Enabled" : "Disabled";
+                await SetBluetoothEnabled(selected == "Enabled");
+                return await IsBluetoothEnabled() ? "Enabled" : "Disabled";
             }
         };
 
-        private static bool IsBluetoothEnabled()
+        public static async Task<bool> IsBluetoothEnabled()
         {
-            if (!RadioHelper.RequestAccess().GetAwaiter().GetResult())
+            if (!await RadioHelper.RequestAccess())
                 throw new InvalidOperationException("Accès radios refusé");
-            var radios = Radio.GetRadiosAsync().GetAwaiter().GetResult();
+            var radios = await Radio.GetRadiosAsync();
             var bt = radios.FirstOrDefault(r => r.Kind == RadioKind.Bluetooth);
             return bt != null && bt.State == RadioState.On;
         }
 
-        private static void SetBluetoothEnabled(bool enable)
+        public static async Task SetBluetoothEnabled(bool enable)
         {
             try
             {
-                if (!RadioHelper.RequestAccess().GetAwaiter().GetResult())
+                if (!await RadioHelper.RequestAccess())
                     throw new InvalidOperationException("Accès radios refusé");
-                var radios = Radio.GetRadiosAsync().GetAwaiter().GetResult();
+                var radios = await Radio.GetRadiosAsync();
                 var bt = radios.FirstOrDefault(r => r.Kind == RadioKind.Bluetooth);
                 if (bt != null)
-                    RadioHelper.SetState(bt, enable).GetAwaiter().GetResult();
+                    await RadioHelper.SetState(bt, enable);
             }
             catch { }
         }

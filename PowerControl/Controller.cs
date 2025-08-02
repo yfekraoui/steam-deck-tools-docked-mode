@@ -12,6 +12,7 @@ using System.Net.NetworkInformation;
 using System.Linq;
 using Windows.Devices.Radios;
 
+
 namespace PowerControl
 {
     internal class Controller : IDisposable
@@ -66,7 +67,6 @@ namespace PowerControl
                 startupManager.Startup = true;
 
             var contextMenu = new System.Windows.Forms.ContextMenuStrip(components);
-
             var notRunningRTSSItem = contextMenu.Items.Add("&RTSS is not running");
             notRunningRTSSItem.Enabled = false;
             contextMenu.Opening += delegate { notRunningRTSSItem.Visible = Dependencies.EnsureRTSS(null) && !OSDHelpers.IsLoaded; };
@@ -141,11 +141,6 @@ namespace PowerControl
             notifyIcon.Text = TitleWithVersion;
             notifyIcon.Visible = true;
             notifyIcon.ContextMenuStrip = contextMenu;
-
-            // Fix first time context menu position
-            contextMenu.Show();
-            contextMenu.Close();
-
             osdDismissTimer = new System.Windows.Forms.Timer(components);
             osdDismissTimer.Interval = 3000;
             osdDismissTimer.Tick += delegate (object? sender, EventArgs e)
@@ -559,22 +554,19 @@ namespace PowerControl
 
 
 
-        private void SystemEvents_DisplaySettingsChanged(object sender, EventArgs e)
+        private async void SystemEvents_DisplaySettingsChanged(object sender, EventArgs e)
         {
             Log.TraceLine("SystemEvents_DisplaySettingsChanged: External display state changed to {0}", isExternalDisplayConnected);
 
             if (isExternalDisplayConnected == 1)
             {
                 Log.TraceLine("External display connected!");
-                System.Diagnostics.Process.Start(@"C:\SteamDeck32\DisplaySwitch.exe", "/external");
-                System.Diagnostics.Process.Start(@"C:\Windows\System32\pnputil.exe", "/scan-devices");
-                SetBluetoothEnabled(true);
+                await SetBluetoothEnabled(true);
             }
             else if (isExternalDisplayConnected == 0)
             {
                 Log.TraceLine("External display disconnected!");
-                System.Diagnostics.Process.Start(@"C:\SteamDeck32\DisplaySwitch.exe", "/internal");
-                SetBluetoothEnabled(false);
+                await SetBluetoothEnabled(false);
             }
             profilesController.ApplyAutostartProfile();
             
@@ -584,7 +576,7 @@ namespace PowerControl
             }));
         }
 
-        private void OnNetworkAddressChanged(object? sender, EventArgs e)
+        private async void OnNetworkAddressChanged(object? sender, EventArgs e)
         {
             if (!IsEthernetCableConnected()) {
                 return;
@@ -592,24 +584,24 @@ namespace PowerControl
             Log.TraceLine("Network address changed event triggered.");
 
             // Vérifie si un câble Ethernet est branché et s'il y a Internet via Ethernet
-            Thread.Sleep(3000);
+            await Task.Delay(3000);
             bool isInternetAvailableViaEthernet = IsInternetAvailableViaEthernet();
             Log.TraceLine("Internet available via Ethernet: " + isInternetAvailableViaEthernet);
 
             // Vérifie l'état actuel du Wi-Fi
-            bool isWiFiEnabled = IsWiFiEnabled();
+            bool isWiFiEnabled = await IsWiFiEnabled();
             Log.TraceLine("Current Wi-Fi state: " + (isWiFiEnabled ? "Enabled" : "Disabled"));
 
             // Gestion du Wi-Fi en fonction de l'état Ethernet et de son état actuel
             if (isInternetAvailableViaEthernet && isWiFiEnabled)
             {
                 Log.TraceLine("Disabling Wi-Fi as Ethernet is active with Internet access.");
-                SetWiFiEnabled(false);
+                await SetWiFiEnabled(false);
             }
             else if (!isInternetAvailableViaEthernet && !isWiFiEnabled)
             {
                 Log.TraceLine("Enabling Wi-Fi as Ethernet is not active or lacks Internet access.");
-                SetWiFiEnabled(true);
+                await SetWiFiEnabled(true);
             }
         }
 
@@ -630,25 +622,25 @@ namespace PowerControl
             return false; // Aucun câble Ethernet détecté
         }
 
-        private bool IsWiFiEnabled()
+        private async Task<bool> IsWiFiEnabled()
         {
-            if (!RadioHelper.RequestAccess().GetAwaiter().GetResult())
+            if (!await RadioHelper.RequestAccess())
                 throw new InvalidOperationException("Accès radios refusé");
-            var radios = Radio.GetRadiosAsync().GetAwaiter().GetResult();
+            var radios = await Radio.GetRadiosAsync();
             var wifi = radios.FirstOrDefault(r => r.Kind == RadioKind.WiFi);
             return wifi != null && wifi.State == RadioState.On;
         }
 
-        private void SetWiFiEnabled(bool enable)
+        private async Task SetWiFiEnabled(bool enable)
         {
             try
             {
-                if (!RadioHelper.RequestAccess().GetAwaiter().GetResult())
+                if (!await RadioHelper.RequestAccess())
                     throw new InvalidOperationException("Accès radios refusé");
-                var radios = Radio.GetRadiosAsync().GetAwaiter().GetResult();
+                var radios = await Radio.GetRadiosAsync();
                 var wifi = radios.FirstOrDefault(r => r.Kind == RadioKind.WiFi);
                 if (wifi != null)
-                    RadioHelper.SetState(wifi, enable).GetAwaiter().GetResult();
+                    await RadioHelper.SetState(wifi, enable);
             }
             catch (Exception ex)
             {
@@ -656,16 +648,16 @@ namespace PowerControl
             }
         }
 
-        private void SetBluetoothEnabled(bool enable)
+        private async Task SetBluetoothEnabled(bool enable)
         {
             try
             {
-                if (!RadioHelper.RequestAccess().GetAwaiter().GetResult())
+                if (!await RadioHelper.RequestAccess())
                     throw new InvalidOperationException("Accès radios refusé");
-                var radios = Radio.GetRadiosAsync().GetAwaiter().GetResult();
+                var radios = await Radio.GetRadiosAsync();
                 var bt = radios.FirstOrDefault(r => r.Kind == RadioKind.Bluetooth);
                 if (bt != null)
-                    RadioHelper.SetState(bt, enable).GetAwaiter().GetResult();
+                    await RadioHelper.SetState(bt, enable);
             }
             catch (Exception ex)
             {

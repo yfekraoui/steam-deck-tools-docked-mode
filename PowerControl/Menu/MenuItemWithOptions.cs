@@ -14,6 +14,8 @@ namespace PowerControl.Menu
         public IList<MenuItemWithOptions> Impacts { get; set; } = new List<MenuItemWithOptions>();
 
         public Func<string?>? CurrentValue { get; set; }
+        public Func<Task<string>>? CurrentValueAsync;
+        public Func<string, Task<string>>? ApplyValueAsync;
         public Func<string[]?>? OptionsValues { get; set; }
         public Func<string, string?>? ApplyValue { get; set; }
         public Action<MenuItemWithOptions, string?, string>? ImpactedBy { get; set; }
@@ -78,6 +80,7 @@ namespace PowerControl.Menu
                     Visible = false;
             }
         }
+        
 
         public void Set(String value, bool immediate, bool refresh)
         {

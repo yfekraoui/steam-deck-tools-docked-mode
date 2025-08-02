@@ -11,36 +11,36 @@ namespace PowerControl.Options
         {
             Name = "Wi-Fi",
             Options = { "Disabled", "Enabled" },
-            CurrentValue = delegate ()
+            CurrentValueAsync = async () =>
             {
-                return IsWiFiEnabled() ? "Enabled" : "Disabled";
+                return await IsWiFiEnabled() ? "Enabled" : "Disabled";
             },
-            ApplyValue = (selected) =>
+            ApplyValueAsync = async (selected) =>
             {
-                SetWiFiEnabled(selected == "Enabled");
-                return IsWiFiEnabled() ? "Enabled" : "Disabled";
+                await SetWiFiEnabled(selected == "Enabled");
+                return await IsWiFiEnabled() ? "Enabled" : "Disabled";
             }
         };
 
-        private static bool IsWiFiEnabled()
+        public static async Task<bool> IsWiFiEnabled()
         {
-            if (!RadioHelper.RequestAccess().GetAwaiter().GetResult())
+            if (!await RadioHelper.RequestAccess())
                 throw new InvalidOperationException("Accès radios refusé");
-            var radios = Radio.GetRadiosAsync().GetAwaiter().GetResult();
+            var radios = await Radio.GetRadiosAsync();
             var wifi = radios.FirstOrDefault(r => r.Kind == RadioKind.WiFi);
             return wifi != null && wifi.State == RadioState.On;
         }
 
-        private static void SetWiFiEnabled(bool enable)
+        public static async Task SetWiFiEnabled(bool enable)
         {
             try
             {
-                if (!RadioHelper.RequestAccess().GetAwaiter().GetResult())
+                if (!await RadioHelper.RequestAccess())
                     throw new InvalidOperationException("Accès radios refusé");
-                var radios = Radio.GetRadiosAsync().GetAwaiter().GetResult();
+                var radios = await Radio.GetRadiosAsync();
                 var wifi = radios.FirstOrDefault(r => r.Kind == RadioKind.WiFi);
                 if (wifi != null)
-                    RadioHelper.SetState(wifi, enable).GetAwaiter().GetResult();
+                    await RadioHelper.SetState(wifi, enable);
             }
             catch { }
         }
