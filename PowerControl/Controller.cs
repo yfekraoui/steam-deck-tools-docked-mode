@@ -507,14 +507,17 @@ namespace PowerControl
         {
             Log.TraceLine("SystemEvents_DisplaySettingsChanged: External display state changed to {0}", isExternalDisplayConnected);
 
-            if (isExternalDisplayConnected == 1)
+           if (isExternalDisplayConnected == 1)
             {
                 Log.TraceLine("External display connected!");
+                System.Diagnostics.Process.Start(@"C:\SteamDeck32\DisplaySwitch.exe", "/external");
+                System.Diagnostics.Process.Start(@"C:\Windows\System32\pnputil.exe", "/scan-devices");
                 await SetBluetoothEnabled(true);
             }
             else if (isExternalDisplayConnected == 0)
             {
                 Log.TraceLine("External display disconnected!");
+                System.Diagnostics.Process.Start(@"C:\SteamDeck32\DisplaySwitch.exe", "/internal");
                 await SetBluetoothEnabled(false);
             }
             profilesController.ApplyAutostartProfile();
