@@ -7,8 +7,10 @@ using PowerControl.Helpers;
 using RTSSSharedMemoryNET;
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Net.NetworkInformation;
 using System.Text.Json;
+using System.Net.NetworkInformation;
+using System.Linq;
+using Windows.Devices.Radios;
 
 namespace PowerControl
 {
@@ -566,13 +568,13 @@ namespace PowerControl
                 Log.TraceLine("External display connected!");
                 System.Diagnostics.Process.Start(@"C:\SteamDeck32\DisplaySwitch.exe", "/external");
                 System.Diagnostics.Process.Start(@"C:\Windows\System32\pnputil.exe", "/scan-devices");
-                System.Diagnostics.Process.Start("radiocontrol.exe", "Bluetooth on");
+                SetBluetoothEnabled(true);
             }
             else if (isExternalDisplayConnected == 0)
             {
                 Log.TraceLine("External display disconnected!");
                 System.Diagnostics.Process.Start(@"C:\SteamDeck32\DisplaySwitch.exe", "/internal");
-                System.Diagnostics.Process.Start("radiocontrol.exe", "Bluetooth off");
+                SetBluetoothEnabled(false);
             }
             profilesController.ApplyAutostartProfile();
             
@@ -602,12 +604,12 @@ namespace PowerControl
             if (isInternetAvailableViaEthernet && isWiFiEnabled)
             {
                 Log.TraceLine("Disabling Wi-Fi as Ethernet is active with Internet access.");
-                System.Diagnostics.Process.Start("radiocontrol.exe", "Wi-Fi off");
+                SetWiFiEnabled(false);
             }
             else if (!isInternetAvailableViaEthernet && !isWiFiEnabled)
             {
                 Log.TraceLine("Enabling Wi-Fi as Ethernet is not active or lacks Internet access.");
-                System.Diagnostics.Process.Start("radiocontrol.exe", "Wi-Fi on");
+                SetWiFiEnabled(true);
             }
         }
 
@@ -630,15 +632,45 @@ namespace PowerControl
 
         private bool IsWiFiEnabled()
         {
-            foreach (NetworkInterface ni in NetworkInterface.GetAllNetworkInterfaces())
+            if (!RadioHelper.RequestAccess().GetAwaiter().GetResult())
+                throw new InvalidOperationException("Accès radios refusé");
+            var radios = Radio.GetRadiosAsync().GetAwaiter().GetResult();
+            var wifi = radios.FirstOrDefault(r => r.Kind == RadioKind.WiFi);
+            return wifi != null && wifi.State == RadioState.On;
+        }
+
+        private void SetWiFiEnabled(bool enable)
+        {
+            try
             {
-                if (ni.NetworkInterfaceType == NetworkInterfaceType.Wireless80211 &&
-                    ni.OperationalStatus == OperationalStatus.Up)
-                {
-                    return true; // Wi-Fi activé
-                }
+                if (!RadioHelper.RequestAccess().GetAwaiter().GetResult())
+                    throw new InvalidOperationException("Accès radios refusé");
+                var radios = Radio.GetRadiosAsync().GetAwaiter().GetResult();
+                var wifi = radios.FirstOrDefault(r => r.Kind == RadioKind.WiFi);
+                if (wifi != null)
+                    RadioHelper.SetState(wifi, enable).GetAwaiter().GetResult();
             }
-            return false; // Wi-Fi désactivé
+            catch (Exception ex)
+            {
+                Log.TraceLine($"Failed to set Wi-Fi state: {ex.Message}");
+            }
+        }
+
+        private void SetBluetoothEnabled(bool enable)
+        {
+            try
+            {
+                if (!RadioHelper.RequestAccess().GetAwaiter().GetResult())
+                    throw new InvalidOperationException("Accès radios refusé");
+                var radios = Radio.GetRadiosAsync().GetAwaiter().GetResult();
+                var bt = radios.FirstOrDefault(r => r.Kind == RadioKind.Bluetooth);
+                if (bt != null)
+                    RadioHelper.SetState(bt, enable).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                Log.TraceLine($"Failed to set Bluetooth state: {ex.Message}");
+            }
         }
     
 
