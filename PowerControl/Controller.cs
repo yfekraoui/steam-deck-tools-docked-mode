@@ -503,57 +503,6 @@ namespace PowerControl
             }
         }
 
-        private bool IsInternetAvailableViaEthernet()
-        {
-            foreach (NetworkInterface ni in NetworkInterface.GetAllNetworkInterfaces())
-            {
-                // Vérifiez si l'interface est de type Ethernet et active
-                if (ni.NetworkInterfaceType == NetworkInterfaceType.Ethernet && ni.OperationalStatus == OperationalStatus.Up)
-                {
-                    // Récupérez les propriétés IP de l'interface
-                    IPInterfaceProperties ipProperties = ni.GetIPProperties();
-
-                    // Vérifiez s'il y a une passerelle par défaut pour cette interface
-                    if (ipProperties.GatewayAddresses.Count > 0)
-                    {
-                        foreach (UnicastIPAddressInformation ipInfo in ipProperties.UnicastAddresses)
-                        {
-                            // Vérifiez que l'adresse IP est IPv4 (excluez IPv6, si nécessaire)
-                            if (ipInfo.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
-                            {
-                                try
-                                {
-                                    using (Ping ping = new Ping())
-                                    {
-                                        PingOptions options = new PingOptions { DontFragment = true };
-                                        byte[] buffer = new byte[32];
-                                        PingReply reply = ping.Send("8.8.8.8", 3000, buffer, options);
-
-                                        if (reply != null && reply.Status == IPStatus.Success)
-                                        {
-                                            // Vérifiez si l'adresse IP source du ping correspond à l'interface Ethernet
-                                            if (reply.Address.Equals(ipInfo.Address))
-                                            {
-                                                Log.TraceLine($"Internet is available via Ethernet interface: {ni.Name}");
-                                                return true; // Internet disponible via Ethernet
-                                            }
-                                        }
-                                    }
-                                }
-                                catch (PingException ex)
-                                {
-                                    Log.TraceLine($"Ping failed for Ethernet interface {ni.Name}: {ex.Message}");
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            return false; // Pas d'accès Internet via Ethernet
-        }
-
-
-
         private async void SystemEvents_DisplaySettingsChanged(object sender, EventArgs e)
         {
             Log.TraceLine("SystemEvents_DisplaySettingsChanged: External display state changed to {0}", isExternalDisplayConnected);
@@ -578,29 +527,22 @@ namespace PowerControl
 
         private async void OnNetworkAddressChanged(object? sender, EventArgs e)
         {
-            if (!IsEthernetCableConnected()) {
-                return;
-            }
             Log.TraceLine("Network address changed event triggered.");
 
-            // Vérifie si un câble Ethernet est branché et s'il y a Internet via Ethernet
+            // Laisser un délai pour que l'état réseau se stabilise
             await Task.Delay(3000);
-            bool isInternetAvailableViaEthernet = IsInternetAvailableViaEthernet();
-            Log.TraceLine("Internet available via Ethernet: " + isInternetAvailableViaEthernet);
 
-            // Vérifie l'état actuel du Wi-Fi
+            bool isEthernetConnected = IsEthernetCableConnected();
             bool isWiFiEnabled = await IsWiFiEnabled();
-            Log.TraceLine("Current Wi-Fi state: " + (isWiFiEnabled ? "Enabled" : "Disabled"));
 
-            // Gestion du Wi-Fi en fonction de l'état Ethernet et de son état actuel
-            if (isInternetAvailableViaEthernet && isWiFiEnabled)
+            if (isEthernetConnected && isWiFiEnabled)
             {
-                Log.TraceLine("Disabling Wi-Fi as Ethernet is active with Internet access.");
+                Log.TraceLine("Ethernet connected - disabling Wi-Fi.");
                 await SetWiFiEnabled(false);
             }
-            else if (!isInternetAvailableViaEthernet && !isWiFiEnabled)
+            else if (!isEthernetConnected && !isWiFiEnabled)
             {
-                Log.TraceLine("Enabling Wi-Fi as Ethernet is not active or lacks Internet access.");
+                Log.TraceLine("Ethernet disconnected - enabling Wi-Fi.");
                 await SetWiFiEnabled(true);
             }
         }
