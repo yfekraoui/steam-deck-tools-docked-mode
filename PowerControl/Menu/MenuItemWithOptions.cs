@@ -70,6 +70,26 @@ namespace PowerControl.Menu
                     Visible = false;
                 }
             }
+            else if (CurrentValueAsync != null)
+            {
+                try
+                {
+                    var result = Task.Run(CurrentValueAsync).GetAwaiter().GetResult();
+                    if (result != null)
+                    {
+                        ActiveOption = result;
+                        Visible = true;
+                    }
+                    else
+                    {
+                        Visible = false;
+                    }
+                }
+                catch (Exception e)
+                {
+                    CommonHelpers.Log.TraceException("Update", Name, e);
+                }
+            }
 
             if (OptionsValues != null)
             {
@@ -104,11 +124,22 @@ namespace PowerControl.Menu
         {
             var wasOption = ActiveOption;
 
-            if (ApplyValue != null && SelectedOption != null)
+            if (SelectedOption != null)
             {
                 try
                 {
-                    ActiveOption = ApplyValue(SelectedOption);
+                    if (ApplyValue != null)
+                    {
+                        ActiveOption = ApplyValue(SelectedOption);
+                    }
+                    else if (ApplyValueAsync != null)
+                    {
+                        ActiveOption = Task.Run(() => ApplyValueAsync(SelectedOption)).GetAwaiter().GetResult();
+                    }
+                    else
+                    {
+                        ActiveOption = SelectedOption;
+                    }
                 }
                 catch (Exception e)
                 {
