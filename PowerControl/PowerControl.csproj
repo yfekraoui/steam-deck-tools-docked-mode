@@ -21,6 +21,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Windows.SDK.Contracts" Version="10.0.19041.1" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\CommonHelpers\CommonHelpers.csproj" />
     <ProjectReference Include="..\ExternalHelpers\ExternalHelpers.csproj" />
   </ItemGroup>
