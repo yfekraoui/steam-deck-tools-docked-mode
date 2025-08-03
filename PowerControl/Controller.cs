@@ -10,6 +10,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using System.Net.NetworkInformation;
 using System.Linq;
+using System.Management;
 using Windows.Devices.Radios;
 
 
@@ -39,6 +40,8 @@ namespace PowerControl
         System.Windows.Forms.Timer neptuneTimer;
 
         ProfilesController? profilesController;
+
+        ManagementEventWatcher? displayChangeWatcher;
 
         SharedData<PowerControlSetting> sharedData = SharedData<PowerControlSetting>.CreateNew();
 
@@ -156,11 +159,22 @@ namespace PowerControl
             osdTimer.Enabled = true;
 
             SystemEvents.DisplaySettingsChanged += SystemEvents_DisplaySettingsChanged;
+            try
+            {
+                var query = new WqlEventQuery("SELECT * FROM Win32_DeviceChangeEvent WHERE EventType = 2 OR EventType = 3 OR EventType = 7");
+                displayChangeWatcher = new ManagementEventWatcher(query);
+                displayChangeWatcher.EventArrived += DisplayChangeWatcher_EventArrived;
+                displayChangeWatcher.Start();
+            }
+            catch (Exception e)
+            {
+                Log.TraceException("WMI", e);
+            }
 
             profilesController = new ProfilesController();
             SystemEvents_DisplaySettingsChanged(this, EventArgs.Empty);
             OnNetworkAddressChanged(this, EventArgs.Empty);
-
+            
             GlobalHotKey.RegisterHotKey(Settings.Default.MenuUpKey, () =>
             {
                 if (!OSDHelpers.IsOSDForeground())
@@ -488,6 +502,22 @@ namespace PowerControl
             {
             }
         }
+        
+        private void DisplayChangeWatcher_EventArrived(object sender, EventArrivedEventArgs e)
+        {
+            try
+            {
+                var eventType = (ushort)(e.NewEvent.Properties["EventType"].Value ?? 0);
+                if (eventType == 2 || eventType == 3 || eventType == 7)
+                {
+                    SystemEvents_DisplaySettingsChanged(sender, EventArgs.Empty);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.TraceException("WMI", ex);
+            }
+        }
 
         private async void SystemEvents_DisplaySettingsChanged(object? sender, EventArgs e)
         {
@@ -677,6 +707,13 @@ namespace PowerControl
                 profilesController?.Dispose();
 
                 SystemEvents.DisplaySettingsChanged -= SystemEvents_DisplaySettingsChanged;
+
+                if (displayChangeWatcher != null)
+                {
+                    displayChangeWatcher.EventArrived -= DisplayChangeWatcher_EventArrived;
+                    displayChangeWatcher.Stop();
+                    displayChangeWatcher.Dispose();
+                }
 
                 // Nettoyez l'icône de la barre des tâches
                 notifyIcon.Visible = false;
