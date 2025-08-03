@@ -159,6 +159,7 @@ namespace PowerControl
 
             profilesController = new ProfilesController();
             SystemEvents_DisplaySettingsChanged(this, EventArgs.Empty);
+            OnNetworkAddressChanged(this, EventArgs.Empty);
 
             GlobalHotKey.RegisterHotKey(Settings.Default.MenuUpKey, () =>
             {
