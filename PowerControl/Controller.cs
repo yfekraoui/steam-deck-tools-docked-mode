@@ -159,7 +159,6 @@ namespace PowerControl
             osdTimer.Enabled = true;
 
             SystemEvents.DisplaySettingsChanged += SystemEvents_DisplaySettingsChanged;
-
             try
             {
                 var query = new WqlEventQuery("SELECT * FROM Win32_DeviceChangeEvent WHERE EventType = 2 OR EventType = 3 OR EventType = 7");
@@ -174,7 +173,8 @@ namespace PowerControl
 
             profilesController = new ProfilesController();
             SystemEvents_DisplaySettingsChanged(this, EventArgs.Empty);
-
+            OnNetworkAddressChanged(this, EventArgs.Empty);
+            
             GlobalHotKey.RegisterHotKey(Settings.Default.MenuUpKey, () =>
             {
                 if (!OSDHelpers.IsOSDForeground())
@@ -502,7 +502,7 @@ namespace PowerControl
             {
             }
         }
-
+        
         private void DisplayChangeWatcher_EventArrived(object sender, EventArrivedEventArgs e)
         {
             try
