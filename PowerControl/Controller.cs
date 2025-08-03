@@ -37,7 +37,6 @@ namespace PowerControl
         SDCInput neptuneDeviceState = new SDCInput();
         DateTime? neptuneDeviceNextKey;
         System.Windows.Forms.Timer neptuneTimer;
-        private System.Windows.Forms.Timer displayCheckTimer;
 
         ProfilesController? profilesController;
 
@@ -156,12 +155,10 @@ namespace PowerControl
             osdTimer.Interval = 250;
             osdTimer.Enabled = true;
 
-            displayCheckTimer = new System.Windows.Forms.Timer();
-            displayCheckTimer.Interval = 1000;
-            displayCheckTimer.Tick += DisplayCheckTimer_Tick;
-            displayCheckTimer.Start();
+            SystemEvents.DisplaySettingsChanged += SystemEvents_DisplaySettingsChanged;
 
             profilesController = new ProfilesController();
+            SystemEvents_DisplaySettingsChanged(this, EventArgs.Empty);
 
             GlobalHotKey.RegisterHotKey(Settings.Default.MenuUpKey, () =>
             {
@@ -267,18 +264,6 @@ namespace PowerControl
 
                 case PowerModes.Resume:
                     break;
-            }
-        }
-
-        private void DisplayCheckTimer_Tick(object? sender, EventArgs e)
-        {
-            bool currentExternalDisplayState = ExternalHelpers.DisplayConfig.IsExternalConnected.GetValueOrDefault(false);
-            int newState = currentExternalDisplayState ? 1 : 0;
-
-            if (newState != isExternalDisplayConnected)
-            {
-                isExternalDisplayConnected = newState;
-                SystemEvents_DisplaySettingsChanged(this, EventArgs.Empty); // Déclenche manuellement l'événement
             }
         }
 
@@ -503,11 +488,19 @@ namespace PowerControl
             }
         }
 
-        private async void SystemEvents_DisplaySettingsChanged(object sender, EventArgs e)
+        private async void SystemEvents_DisplaySettingsChanged(object? sender, EventArgs e)
         {
+            bool currentExternalDisplayState = ExternalHelpers.DisplayConfig.IsExternalConnected.GetValueOrDefault(false);
+            int newState = currentExternalDisplayState ? 1 : 0;
+
+            if (newState == isExternalDisplayConnected)
+                return;
+
+            isExternalDisplayConnected = newState;
+
             Log.TraceLine("SystemEvents_DisplaySettingsChanged: External display state changed to {0}", isExternalDisplayConnected);
 
-           if (isExternalDisplayConnected == 1)
+            if (isExternalDisplayConnected == 1)
             {
                 Log.TraceLine("External display connected!");
                 System.Diagnostics.Process.Start(@"C:\SteamDeck32\DisplaySwitch.exe", "/external");
@@ -520,8 +513,9 @@ namespace PowerControl
                 System.Diagnostics.Process.Start(@"C:\SteamDeck32\DisplaySwitch.exe", "/internal");
                 await SetBluetoothEnabled(false);
             }
+
             profilesController.ApplyAutostartProfile();
-            
+
             System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(new Action(() =>
             {
                 rootMenu.Update();
@@ -666,9 +660,6 @@ namespace PowerControl
             try
             {
                 // Arrêtez et disposez tous les timers
-                displayCheckTimer?.Stop();
-                displayCheckTimer?.Dispose();
-
                 osdDismissTimer?.Stop();
                 osdDismissTimer?.Dispose();
 
@@ -683,6 +674,8 @@ namespace PowerControl
 
                 // Libérez d'autres ressources comme les profils
                 profilesController?.Dispose();
+
+                SystemEvents.DisplaySettingsChanged -= SystemEvents_DisplaySettingsChanged;
 
                 // Nettoyez l'icône de la barre des tâches
                 notifyIcon.Visible = false;
