@@ -278,6 +278,8 @@ namespace PowerControl
                     break;
 
                 case PowerModes.Resume:
+                    SystemEvents_DisplaySettingsChanged(this, EventArgs.Empty);
+                    OnNetworkAddressChanged(this, EventArgs.Empty);
                     break;
             }
         }
