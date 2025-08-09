@@ -166,6 +166,7 @@ namespace PowerControl.Menu
 
                 ValueChanged(this, wasOption, ActiveOption);
             }
+            Update();
         }
 
         public override void CreateMenu(System.Windows.Forms.ContextMenuStrip contextMenu)

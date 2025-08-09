@@ -209,8 +209,8 @@ namespace PowerControl
             Log.TraceLine("ProfilesController: Deleted Profile: {0}", CurrentProfileSettings?.ProfileName);
         }
 
-         private void ApplyProfile(ProfileSettings profileSettings)
-         {
+        private void ApplyProfile(ProfileSettings profileSettings)
+        {
             CurrentProfileSettings = profileSettings;
             ProfileChanged(profileSettings);
 
