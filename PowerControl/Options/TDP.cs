@@ -56,19 +56,48 @@ namespace PowerControl.Options
                 var slowTDP = selectedOption.Get(SlowTDP, DefaultSlowTDP);
                 var fastTDP = selectedOption.Get(FastTDP, DefaultFastTDP);
 
-                return CommonHelpers.Instance.WithGlobalMutex<string>(200, () =>
+                string? result = null;
+                int mutexAttempts = 0;
+                while (result == null && mutexAttempts < 10)
                 {
-                    using (var sd = VangoghGPU.Open())
+                    result = CommonHelpers.Instance.WithGlobalMutex<string>(200, () =>
                     {
-                        if (sd is null)
-                            return null;
+                        VangoghGPU? sd = null;
+                        int attempts = 0;
+                        while (sd == null && attempts < 10)
+                        {
+                            sd = VangoghGPU.Open();
+                            if (sd == null)
+                            {
+                                CommonHelpers.Log.TraceLine($"TDP.ApplyValue: GPU NOT FOUND (attempt {attempts + 1})");
+                                System.Threading.Thread.Sleep(200);
+                                attempts++;
+                            }
+                        }
 
+                        if (sd == null)
+                        {
+                            CommonHelpers.Log.TraceLine("TDP.ApplyValue: GPU still not found after attempts, returning selected");
+                            return selected;
+                        }
+
+                        CommonHelpers.Log.TraceLine($"TDP.ApplyValue: GPU found, applying TDP: slowTDP={slowTDP}, fastTDP={fastTDP}");
                         sd.SlowTDP = (uint)slowTDP;
                         sd.FastTDP = (uint)fastTDP;
-                    }
+                        sd.Dispose();
 
-                    return selected;
-                });
+                        return selected;
+                    });
+
+                    if (result == null)
+                    {
+                        CommonHelpers.Log.TraceLine($"TDP.ApplyValue: Mutex not acquired (attempt {mutexAttempts + 1}), retrying...");
+                        System.Threading.Thread.Sleep(200);
+                        mutexAttempts++;
+                    }
+                }
+                CommonHelpers.Log.TraceLine($"TDP.ApplyValue: returning {result}");
+                return result ?? selected;
             }
         };
     }

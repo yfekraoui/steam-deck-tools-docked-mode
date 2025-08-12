@@ -131,6 +131,7 @@ namespace PowerControl.Menu
                     if (ApplyValue != null)
                     {
                         ActiveOption = ApplyValue(SelectedOption);
+                        CommonHelpers.Log.TraceLine($"FinalizeSet: ApplyValue result={ActiveOption}");
                     }
                     else if (ApplyValueAsync != null)
                     {
