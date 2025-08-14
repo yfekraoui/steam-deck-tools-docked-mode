@@ -39,8 +39,6 @@ namespace PowerControl.Options
             PersistOnCreate = true,
             OptionsValues = () => { return UserOptions().GetOptions(); },
             ApplyDelay = 1000,
-            ResetValue = () => { return "10W"; },
-            ActiveOption = "10W",
             ApplyValue = (selected) =>
             {
                 if (!AntiCheatSettings.Default.AckAntiCheat(

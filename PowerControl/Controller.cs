@@ -537,7 +537,14 @@ namespace PowerControl
             {
                 Log.TraceLine("External display connected!");
                 System.Diagnostics.Process.Start(@"C:\SteamDeck32\DisplaySwitch.exe", "/external");
-                System.Diagnostics.Process.Start(@"C:\Windows\System32\pnputil.exe", "/scan-devices");
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = @"C:\Windows\System32\pnputil.exe",
+                    Arguments = "/scan-devices",
+                    Verb = "runas", // <-- lance en mode administrateur
+                    UseShellExecute = true // Obligatoire pour "runas"
+                };
+                System.Diagnostics.Process.Start(startInfo);
                 await SetBluetoothEnabled(true);
             }
             else if (isExternalDisplayConnected == 0)
